@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Template.Common\Template.Common.csproj" />
+    <ProjectReference Include="..\Template.Data\Template.Data.csproj" />
+    <ProjectReference Include="..\Template.Model\Template.Model.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "github.com/Jslquintero",
+  "classifications": [ "Web", "ASP.NET", "Repository Pattern" ],
+  "identity": "YourCompany.RepositoryTemplate",
+  "name": "ASP.NET Repository Pattern Solution",
+  "shortName": "repoapi",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "sourceName": "Template",
+  "preferNameDirectory": true
+}
