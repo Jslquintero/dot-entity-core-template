@@ -8,7 +8,7 @@ namespace Template.Data
 {
     public class ApplicationDbContext : IdentityDbContext
     {
-        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) 
+        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
         { }
 
         public virtual DbSet<Role> Role { get; set; }

@@ -28,7 +28,7 @@ namespace Template.Api.Controllers
             ILogger<UsersController> logger,
             IConfiguration configuration,
             SignInManager<User> signInManager,
-            UserManager<User> userManager, 
+            UserManager<User> userManager,
             RoleManager<Role> roleManager,
             IUserServices userService
             )
@@ -48,12 +48,12 @@ namespace Template.Api.Controllers
         [AllowAnonymous]
         [HttpPost("login")]
 
-        public async Task<ActionResult<UserViewModel>> Login (LoginViewModel model)
+        public async Task<ActionResult<UserViewModel>> Login(LoginViewModel model)
         {
             try
             {
-                var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password,false, lockoutOnFailure: false);
-          
+                var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, false, lockoutOnFailure: false);
+
                 if (!result.Succeeded)
                 {
                     return Unauthorized(new { message = "Invalid login attempt." });
@@ -61,7 +61,7 @@ namespace Template.Api.Controllers
 
                 var user = await _userManager.FindByEmailAsync(model.Email);
 
-                if(user.IsActive == false)
+                if (user.IsActive == false)
                 {
                     return BadRequest("User is not active in the database");
                 }
@@ -85,7 +85,7 @@ namespace Template.Api.Controllers
 
         public async Task<IActionResult> Logout()
         {
-                       try
+            try
             {
                 await _signInManager.SignOutAsync();
                 return Ok();

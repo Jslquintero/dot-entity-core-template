@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace Template.Model.Entities
 {
     [Table("AspNetRoles")]
-    public  class Role : IdentityRole
+    public class Role : IdentityRole
     {
     }
 }

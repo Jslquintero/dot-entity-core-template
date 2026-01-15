@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Template.Data.Repository
 {
-   public interface IRepository<TEntity>
+    public interface IRepository<TEntity>
     {
         #region Methods
 
