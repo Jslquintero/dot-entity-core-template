@@ -80,7 +80,7 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
                        ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString)); // Can be changed to UseNpgsql() for PostgreSQL
+    options.UseNpgsql(connectionString)); // Using PostgreSQL
 
 // Serilog Logging Configuration
 // For database logging, install appropriate sink package:
