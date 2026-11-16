@@ -1,18 +1,8 @@
-﻿using Template.Model.Entities;
-using Template.Data.Repository;
-using Template.Services.Interfaces;
 using Template.Data;
+using Template.Data.Repository;
+using Template.Model.Entities;
+using Template.Services.Interfaces;
 
-namespace Template.Services
-{
-    public class UserServices : Repository<User>, IUserServices
-    {
-        private readonly ApplicationDbContext _context;
-        public UserServices(ApplicationDbContext context) : base(context)
-        {
-            _context = context;
-        }
+namespace Template.Services;
 
-        // Additional methods specific to UserServices can be added here
-    }
-}
+public class UserServices(ApplicationDbContext context) : Repository<User>(context), IUserServices;

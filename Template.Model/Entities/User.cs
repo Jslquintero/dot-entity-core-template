@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
+using System.ComponentModel.DataAnnotations;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -19,12 +20,12 @@ namespace Template.Model.Entities
         }
 
         #region Properties  
-        [Column(TypeName = "nvarchar(250)")]
+        [MaxLength(250)]
         public string Name { get; set; }
-        [Column(TypeName = "nvarchar(250)")]
+        [MaxLength(250)]
         public string LastName { get; set; }
 
-        public bool? IsActive { get; set; }
+        public bool IsActive { get; set; } = true;
         #endregion
 
         #region NotMappeds  

@@ -1,16 +1,11 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
-namespace Template.Api.Models
+namespace Template.Api.Models;
+
+public sealed record LoginViewModel
 {
-    public class LoginViewModel
-    {
-        [Required(ErrorMessage = "Email is required.")]
-        [Display(Name = "Email")]
-        public required string Email { get; set; }
-
-        [Required(ErrorMessage = "Password is required.")]
-        [Display(Name = "Password")]
-        public required string Password { get; set; }
-
-    }
+    [Required, EmailAddress, StringLength(256)]
+    public required string Email { get; init; }
+    [Required, StringLength(128)]
+    public required string Password { get; init; }
 }

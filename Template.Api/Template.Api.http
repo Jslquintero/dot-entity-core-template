@@ -1,6 +1,20 @@
-@Template.Api_HostAddress = http://localhost:5249
+@host = http://localhost:5249
+@adminEmail = admin@example.test
+@adminPassword = REPLACE_WITH_PASSWORD_FROM_ENV
+@token = REPLACE_WITH_LOGIN_TOKEN
 
-GET {{Template.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+GET {{host}}/healthz
 
-###
+### Login
+POST {{host}}/api/users/login
+Content-Type: application/json
+
+{"email":"{{adminEmail}}","password":"{{adminPassword}}"}
+
+### Current profile
+GET {{host}}/api/users/me
+Authorization: Bearer {{token}}
+
+### Revoke all sessions
+POST {{host}}/api/users/logout
+Authorization: Bearer {{token}}

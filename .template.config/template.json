@@ -1,7 +1,11 @@
 {
   "$schema": "http://json.schemastore.org/template",
   "author": "github.com/Jslquintero",
-  "classifications": [ "Web", "ASP.NET", "Repository Pattern" ],
+  "classifications": [
+    "Web",
+    "ASP.NET",
+    "Repository Pattern"
+  ],
   "identity": "YourCompany.RepositoryTemplate",
   "name": "ASP.NET Repository Pattern Solution",
   "shortName": "repoapi",
@@ -10,5 +14,29 @@
     "type": "project"
   },
   "sourceName": "Template",
-   "preferNameDirectory": true
+  "preferNameDirectory": true,
+  "sources": [
+    {
+      "modifiers": [
+        {
+          "exclude": [
+            "**/bin/**",
+            "**/obj/**",
+            ".git/**",
+            ".env",
+            "**/appsettings.Local.json",
+            "**/TestResults/**",
+            ".agents/**",
+            ".codex/**",
+            ".aws/**",
+            "opencode/**",
+            "AGENTS.md"
+          ]
+        }
+      ]
+    }
+  ],
+  "guids": [
+    "0bddb139-842e-47c5-b05c-af00e937ee79"
+  ]
 }

@@ -1,254 +1,156 @@
-
+using System.Security.Claims;
+using System.Text;
+using System.Threading.RateLimiting;
+using Hangfire;
+using Hangfire.MemoryStorage;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
-using Template.Api.Middlewares;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
+using Serilog;
+using Template.Api.Configuration;
+using Template.Api.Services;
 using Template.Data;
 using Template.Data.Repository;
 using Template.Model.Entities;
-using Serilog;
-using Serilog.Events;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
-using System.Globalization;
-using Template.Api.Utils;
-using Hangfire;
-// Identity seeding method
-static async Task SeedIdentityData(UserManager<User> userManager, RoleManager<Role> roleManager)
-{
-    // Seed Roles
-    var roles = new[] { "SysAdmin", "Admin", "Reparacion", "Caja" };
-
-    foreach (var roleName in roles)
-    {
-        if (!await roleManager.RoleExistsAsync(roleName))
-        {
-            var role = new Role { Name = roleName };
-            var result = await roleManager.CreateAsync(role);
-            if (!result.Succeeded)
-            {
-                Log.Error("Failed to create role {RoleName}: {Errors}",
-                    roleName, string.Join(", ", result.Errors.Select(e => e.Description)));
-            }
-        }
-    }
-
-    // Seed Admin User
-    const string adminEmail = "admin@admin.com";
-    const string adminPassword = "Admin1234";
-
-    var adminUser = await userManager.FindByEmailAsync(adminEmail);
-    if (adminUser == null)
-    {
-        adminUser = new User
-        {
-            UserName = adminEmail,
-            Email = adminEmail,
-            Name = "System",
-            LastName = "Administrator",
-            EmailConfirmed = true
-        };
-
-        var result = await userManager.CreateAsync(adminUser, adminPassword);
-        if (result.Succeeded)
-        {
-            // Assign SysAdmin role
-            await userManager.AddToRoleAsync(adminUser, "SysAdmin");
-            Log.Information("Admin user created successfully with email: {Email}", adminEmail);
-        }
-        else
-        {
-            Log.Error("Failed to create admin user: {Errors}",
-                string.Join(", ", result.Errors.Select(e => e.Description)));
-        }
-    }
-    else
-    {
-        // Ensure admin user has SysAdmin role
-        if (!await userManager.IsInRoleAsync(adminUser, "SysAdmin"))
-        {
-            await userManager.AddToRoleAsync(adminUser, "SysAdmin");
-            Log.Information("SysAdmin role assigned to existing admin user");
-        }
-    }
-}
+using Template.Services;
+using Template.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
+if (builder.Environment.IsDevelopment())
+{
+    builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
+    // Environment variables and command-line arguments take precedence over local settings.
+    builder.Configuration.AddEnvironmentVariables().AddCommandLine(args);
+}
+builder.Host.UseSerilog((context, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration).WriteTo.Console());
 
-// Database Configuration
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-                       ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
-
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(connectionString)); // Using PostgreSQL
-
-// Serilog Logging Configuration
-// For database logging, install appropriate sink package:
-// For SQL Server: Serilog.Sinks.MSSqlServer
-// For PostgreSQL: Serilog.Sinks.PostgreSQL
-// Then configure: .WriteTo.MSSqlServer(...) or .WriteTo.PostgreSQL(...)
-Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
-    .CreateLogger();
-
-builder.Host.UseSerilog();
-
-// Add services to the container.
-builder.Services.AddControllers()
-    .AddNewtonsoftJson(options =>
-        options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore);
-
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
-
-// Repository Services
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+    throw new InvalidOperationException("Configure ConnectionStrings:DefaultConnection for PostgreSQL.");
+builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+builder.Services.AddScoped<IUserServices, UserServices>();
+builder.Services.AddScoped<IRoleServices, RoleServices>();
+builder.Services.AddScoped<TokenService>();
 
-// Identity Configuration
-builder.Services.AddIdentity<User, Role>()
-    .AddEntityFrameworkStores<ApplicationDbContext>()
-    .AddDefaultTokenProviders();
-
-builder.Services.Configure<IdentityOptions>(options =>
+builder.Services.AddIdentityCore<User>(options =>
 {
-    options.Password.RequireDigit = false;
-    options.Password.RequireLowercase = false;
-    options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequireUppercase = false;
-    options.Password.RequiredLength = 6;
-    options.Password.RequiredUniqueChars = 0;
+    options.User.RequireUniqueEmail = true;
+    options.Password.RequiredLength = 12;
+    options.Lockout.MaxFailedAccessAttempts = 5;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+}).AddRoles<Role>().AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddSignInManager().AddDefaultTokenProviders();
 
-    options.Lockout.MaxFailedAccessAttempts = 10;
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(10);
-});
+builder.Services.AddOptions<JwtOptions>()
+    .BindConfiguration(JwtOptions.SectionName).ValidateDataAnnotations()
+    .Validate(options => options.HasStrongKey(), "Jwt:Key must contain at least 32 UTF-8 bytes.")
+    .ValidateOnStart();
+var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new();
+if (!jwt.HasStrongKey())
+    throw new InvalidOperationException("Configure Jwt:Key with at least 32 UTF-8 bytes using secrets or environment variables.");
 
-// Identity Services
-builder.Services.AddTransient<UserManager<User>>();
-builder.Services.AddTransient<RoleManager<Role>>();
-
-// JWT Authentication
-var key = Encoding.ASCII.GetBytes(builder.Configuration.GetValue<string>("SecretKey") ?? "default-secret-key");
-builder.Services.AddAuthentication(x =>
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
-    x.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    x.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-}).AddJwtBearer(x =>
-{
-    x.RequireHttpsMetadata = false;
-    x.SaveToken = true;
-    x.TokenValidationParameters = new TokenValidationParameters
+    options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(key),
-        ValidateIssuer = false,
-        ValidateAudience = false
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Key)),
+        ValidateIssuer = true,
+        ValidIssuer = jwt.Issuer,
+        ValidateAudience = true,
+        ValidAudience = jwt.Audience,
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.FromSeconds(30),
+        ValidAlgorithms = [SecurityAlgorithms.HmacSha256]
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<User>>();
+            var userId = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = userId is null ? null : await userManager.FindByIdAsync(userId);
+            // Database validation makes logout, password changes and deactivation revoke existing tokens.
+            if (user is null || !user.IsActive ||
+                context.Principal?.FindFirstValue(JwtOptions.SecurityStampClaim) != user.SecurityStamp)
+                context.Fail("The session is no longer valid.");
+        }
     };
 });
-
-// AutoMapper Configuration
-builder.Services.AddAutoMapper(typeof(AutoMapping));
-
-// CORS Configuration
-builder.Services.AddCors(options =>
+builder.Services.AddAuthorization();
+builder.Services.AddControllers();
+builder.Services.AddProblemDetails();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
 {
-    options.AddPolicy(name: "_MyCors", policy =>
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "Template API", Version = "v1" });
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        policy.SetIsOriginAllowed(origin => true) // Configure as needed for your origins
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowAnyOrigin();
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
+    });
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("Bearer", document)] = []
     });
 });
-
-// Health Checks
-builder.Services.AddHealthChecks()
-    .AddDbContextCheck<ApplicationDbContext>();
-
-// Hangfire Configuration
-builder.Services.AddHangfire(configuration => configuration
-    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-    .UseSimpleAssemblyNameTypeSerializer()
-    .UseRecommendedSerializerSettings()); // Uses in-memory storage by default for development
-
-builder.Services.AddHangfireServer(options =>
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
 {
-    options.WorkerCount = Math.Max(Environment.ProcessorCount * 2, 10); // Dynamic worker count
-    options.Queues = new[] { "default", "critical" }; // Define queues
+    var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+    if (origins.Length > 0)
+        policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod();
+}));
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
 });
+builder.Services.AddHealthChecks().AddDbContextCheck<ApplicationDbContext>();
 
-// Service Registration Patterns
-// Register services following these patterns:
-// builder.Services.AddScoped<IServiceName, ServiceName>();
-// builder.Services.AddTransient<IEmailServices, EmailServices>();
-// builder.Services.AddSingleton<ISharedService, SharedService>();
-
-// Background Services Structure (optional)
-// To add background services, create classes that implement IHostedService:
-// public class YourBackgroundService : BackgroundService
-// {
-//     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-//     {
-//         // Your background processing logic here
-//     }
-// }
-// Then register: builder.Services.AddHostedService<YourBackgroundService>();
+// Memory storage is explicitly opt-in and development-only. Production jobs need durable storage.
+var hangfireEnabled = builder.Configuration.GetValue<bool>("Hangfire:Enabled");
+if (hangfireEnabled)
+{
+    if (!builder.Environment.IsDevelopment())
+        throw new InvalidOperationException("Configure durable Hangfire storage before enabling jobs outside Development.");
+    builder.Services.AddHangfire(configuration => configuration.UseMemoryStorage());
+    builder.Services.AddHangfireServer();
+}
 
 var app = builder.Build();
-
-// Database Migration and Seeding on Startup
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
-
-    try
-    {
-        Log.Information("Applying database migrations...");
-        dbContext.Database.Migrate();
-        Log.Information("Database migrations applied successfully.");
-
-        // Seed identity data
-        await SeedIdentityData(userManager, roleManager);
-        Log.Information("Identity data seeded successfully.");
-    }
-    catch (Exception ex)
-    {
-        Log.Error(ex, "Error during database migration or seeding");
-        throw;
-    }
-}
-
-// Configure the HTTP request pipeline.
+app.UseExceptionHandler();
+app.UseSerilogRequestLogging();
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
-
-app.UseSerilogRequestLogging();
-
-app.UseSwagger();
-app.UseSwaggerUI();
-
-app.UseHttpsRedirection();
-
-app.UseStaticFiles();
-
-app.UseCors("_MyCors");
-
+if (builder.Configuration.GetValue<bool>("HttpsRedirection:Enabled"))
+    app.UseHttpsRedirection();
+app.UseRouting();
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
-
-// Hangfire Dashboard (only in development)
-if (app.Environment.IsDevelopment())
-{
-    app.UseHangfireDashboard("/hangfire");
-}
-
-app.UseApplicationIdentity();
-
-app.UseHealthChecks("/healthz");
-
+app.UseRateLimiter();
+if (hangfireEnabled)
+    app.UseHangfireDashboard(); // Hangfire's default dashboard filter allows local requests only.
+app.MapHealthChecks("/healthz");
 app.MapControllers();
 
-app.Run();
+await DatabaseInitializer.InitializeAsync(app.Services, app.Configuration);
+await app.RunAsync();
+
+public partial class Program;

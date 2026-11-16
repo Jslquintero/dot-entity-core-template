@@ -4,7 +4,7 @@ This document provides comprehensive guidelines for coding agents working on thi
 
 ## Project Overview
 
-This is a .NET 9 ASP.NET Core Web API template implementing:
+This is a .NET 10 ASP.NET Core Web API template implementing:
 - Entity Framework Core with Identity
 - Repository pattern
 - Service layer architecture
@@ -17,6 +17,15 @@ This is a .NET 9 ASP.NET Core Web API template implementing:
 - `Template.Model/` - Entity models and DTOs
 - `Template.Data/` - EF Core context and repositories
 - `Template.Common/` - Shared utilities
+
+## Current runtime baseline
+
+- PostgreSQL 16 is the configured provider; do not add SQL Server column types.
+- Run `python3 scripts/setup-dev.py` for local secrets and `docker compose up --build -d` to start.
+- Run `python3 scripts/test.py` for tests against isolated PostgreSQL. Direct integration tests require `TEST_POSTGRES_CONNECTION` with CREATEDB permission.
+- Use `dotnet tool restore` for the repository-local EF tool.
+- Keep API responses free of passwords and hashes. JWT logout revokes all sessions via the security stamp.
+- DTOs and startup configuration in the repository take precedence over illustrative examples below.
 
 ## Build, Test, and Lint Commands
 
@@ -86,19 +95,19 @@ dotnet format --exclude-diagnostics IDE0001,IDE0002
 ### Database Operations
 ```bash
 # Create migration
-dotnet ef migrations add InitialCreate --project Template.Data
+dotnet ef migrations add MigrationName --project Template.Data --startup-project Template.Api
 
 # Update database
-dotnet ef database update --project Template.Data
+dotnet ef database update --project Template.Data --startup-project Template.Api
 
 # Generate SQL script
-dotnet ef migrations script --project Template.Data
+dotnet ef migrations script --project Template.Data --startup-project Template.Api
 ```
 
 ## Code Style Guidelines
 
 ### Language Features and Framework Usage
-- **Target Framework:** .NET 9.0
+- **Target Framework:** .NET 10.0
 - **Nullable Reference Types:** Enabled - always handle nulls appropriately
 - **Implicit Usings:** Enabled
 - **File-scoped Namespaces:** Preferred for new files
@@ -210,7 +219,7 @@ public void PublicMethod() { }
 [Table("AspNetUsers")]
 public class User : IdentityUser
 {
-    [Column(TypeName = "nvarchar(250)")]
+    [MaxLength(250)]
     public string Name { get; set; }
 
     [NotMapped]
@@ -568,5 +577,4 @@ dotnet aspnet-codegenerator controller -name UsersController -async -api -m User
 dotnet add Template.Api package Microsoft.AspNetCore.Identity.EntityFrameworkCore
 ```
 
-This document should be updated as the project evolves and new patterns emerge.</content>
-<parameter name="filePath">/mnt/REPOS/repos/Personal/dot-entity-core-template/AGENTS.md
+This document should be updated as the project evolves and new patterns emerge.
